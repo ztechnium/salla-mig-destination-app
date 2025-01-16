@@ -1,0 +1,150 @@
+{
+    "streams": [
+      {
+        "stream": {
+          "name": "products",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "product_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "cost_price": {
+                "type": "number"
+              },
+              "sale_price": {
+                "type": "number"
+              },
+              "description": {
+                "type": "string"
+              },
+              "subtitle": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "pinned": {
+                "type": "boolean"
+              },
+              "weight": {
+                "type": "number"
+              },
+              "weight_type": {
+                "type": "string"
+              },
+              "quantity": {
+                "type": "number"
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "images": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "alt": {
+                      "type": "string"
+                    },
+                    "sort": {
+                      "type": "integer"
+                    },
+                    "is_default": {
+                      "type": "boolean"
+                    },
+                    "original": {
+                      "type": "string"
+                    },
+                    "thumbnail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "display_type": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "brand_id": {
+                "type": "integer"
+              },
+              "categories": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "sale_end": {
+                "type": "string"
+              },
+              "source_id": {
+                "type": "string"
+              },
+              "promotion_title": {
+                "type": "string"
+              },
+              "is_available": {
+                "type": "boolean"
+              },
+              "product_type": {
+                "type": "string"
+              },
+              "enable_note": {
+                "type": "boolean"
+              },
+              "hide_quantity": {
+                "type": "boolean"
+              },
+              "active_advance": {
+                "type": "boolean"
+              },
+              "require_shipping": {
+                "type": "boolean"
+              },
+              "enable_upload_image": {
+                "type": "boolean"
+              },
+              "maximum_quantity_per_order": {
+                "type": "integer"
+              }
+            }
+          },
+          "supported_sync_modes": ["full_refresh", "incremental"]
+        },
+        "sync_mode": "incremental",
+        "destination_sync_mode": "append"
+      }
+    ]
+  }
+  
