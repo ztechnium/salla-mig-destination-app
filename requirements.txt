@@ -1,4 +1,4 @@
-libpq-dev
+#libpq-dev
 airbyte-cdk>=6.18.2
 psycopg2
 requests
