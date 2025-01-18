@@ -1,3 +1,4 @@
+import time
 import logging
 import requests
 from typing import Any, Iterable, Mapping
@@ -5,7 +6,6 @@ from airbyte_cdk.destinations import Destination
 from airbyte_cdk.models import AirbyteConnectionStatus, AirbyteMessage, ConfiguredAirbyteCatalog, Status, Type
 
 logger = logging.getLogger("airbyte")
-
 
 class DestinationSalla(Destination):
     def __init__(self):
@@ -23,13 +23,14 @@ class DestinationSalla(Destination):
         input_messages: Iterable[AirbyteMessage],
     ) -> Iterable[AirbyteMessage]:
         """
-        Main write method to process input messages and sync product data to the Salla API.
+        Process input messages and sync product data to the Salla API, tracking failed records.
         """
         logger.info("Starting to process Airbyte input messages for Salla API.")
+        last_state = None
+        failed_records = []  # List to track failed records
 
         for message in input_messages:
             if message.type == Type.RECORD:
-                # Ensure we're processing the correct stream (products)
                 if message.record.stream == "products":
                     record = message.record.data
                     logger.debug(f"Processing product record: {record}")
@@ -38,17 +39,20 @@ class DestinationSalla(Destination):
                     payload = self.transform_product(record)
 
                     # Send the payload to the Salla API
-                    if self.send_to_salla_api(payload):
+                    if self.send_to_salla_api(payload, failed_records):
                         logger.info(f"Product synced successfully: {record.get('name', 'Unknown')}")
                     else:
                         logger.error(f"Failed to sync product: {record.get('name', 'Unknown')}")
 
             elif message.type == Type.STATE:
-                # Emit state messages back to Airbyte
-                logger.info("State message received and emitted back.")
-                yield message
-            else:
-                logger.warning(f"Unsupported message type: {message.type}")
+                logger.info(f"State message received: {message.state.data}")
+                last_state = message.state.data
+
+        # Emit updated state including failed records
+        if last_state:
+            logger.info(f"Emitting state with failed records: {len(failed_records)} failed.")
+            last_state["failed_records"] = failed_records
+            yield AirbyteMessage(type=Type.STATE, state=last_state)
 
         logger.info("Finished processing all input messages for Salla API.")
 
@@ -97,24 +101,52 @@ class DestinationSalla(Destination):
             "channels": record.get("channels", []),
         }
 
-    def send_to_salla_api(self, payload: dict) -> bool:
+    def send_to_salla_api(self, payload: dict, failed_records: list, max_retries: int = 3, retry_delay: int = 2) -> bool:
         """
-        Send a product payload to the Salla API.
+        Send a product payload to the Salla API with retry logic for transient failures.
+        Tracks records that fail with a 500 error.
+
+        :param payload: The product payload to be sent.
+        :param failed_records: A list to track failed records.
+        :param max_retries: The maximum number of retries for failed requests.
+        :param retry_delay: The delay (in seconds) between retries.
+        :return: True if the product was synced successfully, False otherwise.
         """
         try:
-            logger.debug(f"Sending payload to Salla API: {payload}")
-            response = requests.post(self.api_url, headers=self.headers, json=payload)
+            attempts = 0
+            while attempts < max_retries:
+                try:
+                    logger.debug(f"Sending payload to Salla API (attempt {attempts + 1}): {payload}")
+                    response = requests.post(self.api_url, headers=self.headers, json=payload)
 
-            if response.status_code in (200, 201):
-                logger.info(f"Product synced successfully. Response code: {response.status_code}")
-                return True
-            else:
-                logger.error(
-                    f"Failed to sync product. Response code: {response.status_code}, Error: {response.text}"
-                )
-                return False
+                    if response.status_code in (200, 201):
+                        logger.info(f"Product synced successfully. Response code: {response.status_code}")
+                        return True
+                    elif response.status_code >= 500:
+                        # Retry on server-side errors
+                        logger.warning(f"Salla API returned server error: {response.status_code}. Retrying...")
+                    else:
+                        # Log client-side or validation errors
+                        logger.error(
+                            f"Failed to sync product. Response code: {response.status_code}, Error: {response.text}"
+                        )
+                        failed_records.append({"payload": payload, "error": response.text})
+                        return False
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"Connection error during API request: {e}. Retrying...")
+                finally:
+                    attempts += 1
+                    if attempts < max_retries:
+                        time.sleep(retry_delay)
+
+            # If all retries fail, log and track the failed record
+            logger.error(f"Exceeded maximum retries ({max_retries}) for payload: {payload}")
+            failed_records.append({"payload": payload, "error": "Exceeded retries"})
+            return False
+
         except Exception as e:
-            logger.error(f"Error sending product to Salla API: {e}")
+            logger.error(f"Unexpected error: {e}")
+            failed_records.append({"payload": payload, "error": repr(e)})
             return False
         
 
