@@ -43,6 +43,7 @@ class DestinationSalla(Destination):
                     # Send the payload to the Salla API
                     #if self.send_to_salla_api(payload, failed_records):
                     payload = self.format_payload(record)
+                    payload = self.convert_to_correct_format(payload)
                     if self.send_to_salla_api(payload, failed_records):
                         logger.info(f"Product synced successfully: {record.get('name', 'Unknown')}")
                     else:
@@ -77,6 +78,37 @@ class DestinationSalla(Destination):
         # Convert any Decimal or date objects to serializable format
         data = self.convert_data_to_serializable(data)
         return data
+    
+
+    def convert_to_correct_format(self,payload):
+        # Convert 'images' from JSON string to a Python list
+        if isinstance(payload.get('images'), str):
+            payload['images'] = json.loads(payload['images'])
+
+        # Convert 'options' from JSON string to a Python list
+        if isinstance(payload.get('options'), str):
+            payload['options'] = json.loads(payload['options'])
+
+        # Convert 'channels' from JSON string to a Python list
+        if isinstance(payload.get('channels'), str):
+            payload['channels'] = json.loads(payload['channels'])
+
+        # Convert 'categories' from JSON string to a Python list
+        if isinstance(payload.get('categories'), str):
+            payload['categories'] = json.loads(payload['categories'])
+
+        # Ensure all number fields (like price, cost_price, sale_price) are floats
+        for field in ['price', 'cost_price', 'sale_price']:
+            if isinstance(payload.get(field), (int, float)):
+                payload[field] = float(payload[field])
+
+        # Ensure booleans (True/False) remain correct, no changes needed but added for clarity
+        # for field in ['pinned', 'is_available', 'enable_note', 'hide_quantity', 'active_advance', 'require_shipping',
+        #             'enable_upload_image']:
+        #     if isinstance(payload.get(field), str):
+        #         payload[field] = payload[field].lower() == 'true'
+
+        return payload
     def transform_product(self, record: Mapping[str, Any]) -> dict:
         """
         Transform the input product record into the required Salla API payload format.
