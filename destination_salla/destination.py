@@ -4,7 +4,9 @@ import requests
 from typing import Any, Iterable, Mapping
 from airbyte_cdk.destinations import Destination
 from airbyte_cdk.models import AirbyteConnectionStatus, AirbyteMessage, ConfiguredAirbyteCatalog, Status, Type
-
+import json
+from decimal import Decimal
+from datetime import date
 logger = logging.getLogger("airbyte")
 
 class DestinationSalla(Destination):
@@ -31,14 +33,16 @@ class DestinationSalla(Destination):
 
         for message in input_messages:
             if message.type == Type.RECORD:
-                if message.record.stream == "products":
+                if message.record.stream == "products_unified_data":
                     record = message.record.data
                     logger.debug(f"Processing product record: {record}")
 
                     # Transform the record into the Salla API payload
-                    payload = self.transform_product(record)
+                    #payload = self.transform_product(record)
 
                     # Send the payload to the Salla API
+                    #if self.send_to_salla_api(payload, failed_records):
+                    payload = self.format_payload(record)
                     if self.send_to_salla_api(payload, failed_records):
                         logger.info(f"Product synced successfully: {record.get('name', 'Unknown')}")
                     else:
@@ -56,6 +60,23 @@ class DestinationSalla(Destination):
 
         logger.info("Finished processing all input messages for Salla API.")
 
+    def convert_data_to_serializable(self,data):
+        """Recursively convert all Decimal and date objects to a serializable type."""
+        if isinstance(data, Decimal):
+            return float(data)
+        elif isinstance(data, date):  # Handle date objects
+            return data.isoformat()  # Convert date to string (ISO format)
+        elif isinstance(data, dict):
+            return {key: self.convert_data_to_serializable(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self.convert_data_to_serializable(item) for item in data]
+        return data
+
+
+    def format_payload(self,data):
+        # Convert any Decimal or date objects to serializable format
+        data = self.convert_data_to_serializable(data)
+        return data
     def transform_product(self, record: Mapping[str, Any]) -> dict:
         """
         Transform the input product record into the required Salla API payload format.
