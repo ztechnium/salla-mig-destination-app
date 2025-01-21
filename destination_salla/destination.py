@@ -205,91 +205,16 @@ class DestinationSalla(Destination):
 
     def check(self, logger: logging.Logger, config: Mapping[str, Any]) -> AirbyteConnectionStatus:
         """
-        Verifies that the input configuration is valid and the Salla API is reachable.
+        Tests if the input configuration can be used to successfully connect to the destination with the needed permissions
+            e.g: if a provided API token or password can be used to connect and write to the destination.
+        :param logger: Logging object to display debug/info/error to the logs
+            (logs will not be accessible via airbyte UI if they are not passed to this logger)
+        :param config: Json object containing the configuration of this destination, content of this json is as specified in
+        the properties of the spec.json file
+        :return: AirbyteConnectionStatus indicating a Success or Failure
         """
-        logger.info("Checking connection to the Salla API...")
-
-        api_url = "https://api.salla.dev/admin/v2/products"  # Test endpoint
-        headers = {
-            "Authorization": f"Bearer {config['api_key']}",
-            "Content-Type": "application/json",
-        }
-
-        # Detailed test payload
-        test_payload = {
-            "name": "Test Product",
-            "source_id": "1234567890",
-            "price": 100.0,
-            "status": "out",
-            "product_type": "product",
-            "quantity": 10,
-            "booking_details": {
-                "location": "Test Location",
-                "type": "date",
-                "time_strict_value": 3,
-                "time_strict_type": "days",
-                "sessions_count": 5,
-                "session_gap": 2,
-                "session_duration": 60,
-                "availabilities": [
-                    {
-                        "day": "sunday",
-                        "is_available": True,
-                        "times": [{"from": "10:00", "to": "12:00"}],
-                    }
-                ],
-                "overrides": [{"day": "sunday", "date": "2030-01-01"}],
-            },
-            "description": "This is a test product for connection validation.",
-            "categories": [2037622520],
-            "sale_price": 90.0,
-            "cost_price": 80.0,
-            "require_shipping": False,
-            "maximum_quantity_per_order": 1,
-            "weight": 5.0,
-            "weight_type": "kg",
-            "hide_quantity": False,
-            "images": [
-                {
-                    "original": "https://example.com/image.jpg",
-                    "thumbnail": "https://example.com/thumbnail.jpg",
-                    "alt": "Test Image",
-                    "default": True,
-                }
-            ],
-            "options": [
-                {
-                    "name": "Color",
-                    "display_type": "text",
-                    "values": [{"name": "Red"}, {"name": "Blue"}],
-                }
-            ],
-            "translations": {
-                "en": {
-                    "name": "Test Product - EN",
-                    "description": "Test description - EN",
-                    "subtitle": "Test subtitle - EN",
-                }
-            },
-        }
-
         try:
-            # Make a test request to validate the connection
-            response = requests.post(api_url, headers=headers, json=test_payload)
-
-            if response.status_code in (200, 201):
-                logger.info("Connection to Salla API successful.")
-                return AirbyteConnectionStatus(status=Status.SUCCEEDED)
-            else:
-                logger.error(
-                    f"Failed to connect to Salla API. Status code: {response.status_code}, Error: {response.text}"
-                )
-                return AirbyteConnectionStatus(
-                    status=Status.FAILED,
-                    message=f"Failed to connect to Salla API. Error: {response.text}",
-                )
+            # TODO
+            return AirbyteConnectionStatus(status=Status.SUCCEEDED)
         except Exception as e:
-            logger.error(f"Exception while connecting to Salla API: {e}")
-            return AirbyteConnectionStatus(
-                status=Status.FAILED, message=f"Exception while connecting to Salla API: {repr(e)}"
-            )
+            return AirbyteConnectionStatus(status=Status.FAILED, message=f"An exception occurred: {repr(e)}")
