@@ -15,7 +15,7 @@ data:
   connectorSubtype: database
   connectorType: destination
   definitionId: b15528bc-ca32-4dbf-aadc-8df92ed15faa
-  dockerImageTag: 0.1.0
+  dockerImageTag: 0.1.3.3
   dockerRepository: airbyte/destination-salla
   githubIssueLabel: destination-salla
   icon: salla.svg
