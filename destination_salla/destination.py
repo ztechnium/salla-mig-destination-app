@@ -7,17 +7,53 @@ from airbyte_cdk.models import AirbyteConnectionStatus, AirbyteMessage, Configur
 import json
 from decimal import Decimal
 from datetime import date
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 logger = logging.getLogger("airbyte")
 
+def get_current_script_directory():
+    # Get the absolute path of the current script
+    script_path = os.path.abspath(__file__)
+    # Get the directory containing the script
+    script_dir = os.path.dirname(script_path)
+    return script_dir
+# Function to load environment variables from .env file
+def load_env(file_path):
+    """
+    Load environment variables from a .env file.
+    """
+    env_vars = {}
+    try:
+        with open(file_path, "r") as file:
+            for line in file:
+                # Strip whitespace and skip comments or empty lines
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    # Split the line into key and value
+                    key, value = line.split("=", 1)
+                    env_vars[key.strip()] = value.strip()
+    except Exception as e:
+        print(f"Warning: {file_path} not found. Using default environment variables.")
+        raise Exception(f"Warning: {file_path} not found. Error {e}")
+    return env_vars
+# Load environment variables
+env_file_path = os.path.join(get_current_script_directory(), ".env")
+env_vars = load_env(env_file_path)
+# Access environment variables
+DB_CONFIG = {
+    "host": env_vars.get("DB_HOST"),
+    "port": int(env_vars.get("DB_PORT")),
+    "user": env_vars.get("DB_USER"),
+    "password": env_vars.get("DB_PASSWORD"),
+    "sslmode": env_vars.get("DB_SSLMODE"),
+}
 class DestinationSalla(Destination):
     def __init__(self):
-        # Salla API configuration
-        self.api_url = "https://api.salla.dev/admin/v2/products"
-        self.headers = {
-            "Authorization": "Bearer 5713bd1f2c76d8d11362831ce0128b866e139c5f7c47175eec92e0d8fb7747dd9fe226203e",
-            "Content-Type": "application/json",
-        }
-
+        self.api_url = None
+        self.api_key = None
+        self.headers = None
     def write(
         self,
         config: Mapping[str, Any],
@@ -44,7 +80,7 @@ class DestinationSalla(Destination):
                     #if self.send_to_salla_api(payload, failed_records):
                     payload = self.format_payload(record)
                     payload = self.convert_to_correct_format(payload)
-                    if self.send_to_salla_api(payload, failed_records):
+                    if self.send_to_salla_api(payload, failed_records,config):
                         logger.info(f"Product synced successfully: {record.get('name', 'Unknown')}")
                     else:
                         logger.error(f"Failed to sync product: {record.get('name', 'Unknown')}")
@@ -154,7 +190,7 @@ class DestinationSalla(Destination):
             "channels": record.get("channels", []),
         }
 
-    def send_to_salla_api(self, payload: dict, failed_records: list, max_retries: int = 3, retry_delay: int = 2) -> bool:
+    def send_to_salla_api(self, payload: dict, failed_records: list,config: Mapping[str, Any], max_retries: int = 3, retry_delay: int = 2) -> bool:
         """
         Send a product payload to the Salla API with retry logic for transient failures.
         Tracks records that fail with a 500 error.
@@ -165,6 +201,19 @@ class DestinationSalla(Destination):
         :param retry_delay: The delay (in seconds) between retries.
         :return: True if the product was synced successfully, False otherwise.
         """
+        #get the api url and api key from the config and make a header
+        try:
+            self.api_url = config["api_url"]
+            self.api_key = config["api_key"]
+            self.headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+            if not self.api_url or not self.api_key:
+                raise KeyError("api_url or api_key")
+        except KeyError as e:
+            logger.error(f"Missing required configuration: {e}")
+            return False
         try:
             attempts = 0
             while attempts < max_retries:
@@ -174,6 +223,22 @@ class DestinationSalla(Destination):
 
                     if response.status_code in (200, 201):
                         logger.info(f"Product synced successfully. Response code: {response.status_code}")
+                        #add to the DB_CONFIG the name of the db from the payload db_name
+                        DB_CONFIG['dbname'] = payload['db_name']
+                        #try to connect to the database and in product_unified_data table change is_synced to true and synced_time to now for product_id from the payload
+                        try:
+                            conn = psycopg2.connect(**DB_CONFIG)
+                            conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+                            cursor = conn.cursor(cursor_factory=RealDictCursor)
+                            cursor.execute(
+                                f"UPDATE products_unified_data SET is_synced = TRUE, synced_time = NOW() WHERE product_id = '{payload['product_id']}'"
+                            )
+                            conn.commit()
+                            cursor.close()
+                            conn.close()
+                            logger.info(f"Product record updated in database: {payload['product_id']}")
+                        except Exception as e:
+                            logger.error(f"Failed to update product record in database to be synced: {e}")
                         return True
                     elif response.status_code >= 500:
                         # Retry on server-side errors
